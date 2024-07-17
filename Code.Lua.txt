@@ -1,17 +1,22 @@
+-- Load the required Roblox services 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local MarketplaceService = game:GetService("MarketplaceService")
+local DataStoreService = game:GetService("DataStoreService")
+local BadgeService = game:GetService("BadgeService")
+-- Define remote events and other variables
 local RemoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
-local NumPerMap = ReplicatedStorage:WaitForChild("NumPerMap")
 local Doors = Workspace:WaitForChild("Doors")
+local NumPerMap = game.ReplicatedStorage:FindFirstChild("NumPerMap")
 local ObjectFindEvent = RemoteEvents:WaitForChild("ObjectFindEvent")
 local CharChangeEvent = RemoteEvents:WaitForChild("CharChangeEvent")
 local TrailEvent = RemoteEvents:WaitForChild("TrailEvent")
 local UnlockDoorEvent = RemoteEvents:WaitForChild("UnlockDoorEvent")
-local DataStoreService = game:GetService("DataStoreService")
+local DoorClientEvent = RemoteEvents:WaitForChild("DoorClientEvent")
+-- Data store for player data
 local PlayerData = DataStoreService:GetDataStore("PlayerData")
-local BadgeService = game:GetService("BadgeService")
+-- Gamepass IDs
 local GamePassIDs = {
 	Vip = 852237365,
 	Carpet = 852336194,
@@ -33,6 +38,7 @@ local GamePassIDs = {
 	GreenTrail = 852381447,
 	WhiteTrail = 852291565
 }
+-- Function to give a tool to a player
 local function giveTool(player, toolName)
 	local toolClone = ReplicatedStorage.Tools:FindFirstChild(toolName):Clone()
 	toolClone.Parent = player.Backpack
@@ -42,6 +48,7 @@ local function giveTool(player, toolName)
 		new.Value = player:GetAttribute("WalkSpeed")
 	end
 end
+-- Function to handle game pass purchases
 local function handleGamePass(player, gamePassID, callback)
 	local retries = 3
 	local success, ownsPass
@@ -62,6 +69,7 @@ local function handleGamePass(player, gamePassID, callback)
 		warn("Error checking game pass ownership after " .. retries .. " attempts: " .. tostring(ownsPass))
 	end
 end
+-- Function to handle game pass purchase finished event
 local function onPromptPurchaseFinished(player, purchasedPassID, purchaseSuccess)
 	if not purchaseSuccess then return end
 	local gamePassActions = {
@@ -129,7 +137,9 @@ local function onPromptPurchaseFinished(player, purchasedPassID, purchaseSuccess
 		gamePassActions[purchasedPassID]()
 	end
 end
+-- Connect the game pass purchase finished event
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPromptPurchaseFinished)
+-- Function to create a trail for the player
 function CreateTrail(player, TrailName)
 	local playerTrails = player.Character:FindFirstChild("Trails") or Instance.new("Folder", player.Character)
 	playerTrails.Name = "Trails"
@@ -165,11 +175,13 @@ function CreateTrail(player, TrailName)
 		player:SetAttribute("Trail", newTrail.Name)
 	end
 end
+-- Connect the trail event
 TrailEvent.OnServerEvent:Connect(function(player, trailName)
 	if player then
 		CreateTrail(player, trailName)
 	end
 end)
+-- Connect the object find event
 ObjectFindEvent.OnServerEvent:Connect(function(player, object)
 	local ObjectsValue = player:WaitForChild("ObjectsValue")
 	ObjectsValue.Value += 1
@@ -177,108 +189,170 @@ ObjectFindEvent.OnServerEvent:Connect(function(player, object)
 	local newObject = Instance.new("StringValue", ObjectsName)
 	newObject.Name = object
 end)
-local DoorClientEvent = RemoteEvents:WaitForChild("DoorClientEvent")
-DoorClientEvent.OnServerEvent:Connect(function(player,message)
+-- Connect the door client event
+DoorClientEvent.OnServerEvent:Connect(function(player, message)
 	if player then
 		if not player:FindFirstChild("Doors"):FindFirstChild(message) then
-			local new = Instance.new("StringValue",player:FindFirstChild("Doors"))
+			local new = Instance.new("StringValue", player:FindFirstChild("Doors"))
 			new.Name = message
 		end
 	end
 end)
+-- Initialize total objects value
 game.ReplicatedStorage.AllObjects.Value = (#Doors:GetChildren() + 1) * NumPerMap.Value  
+-- Badge IDs
 local WelcomeId = 2498866318158630
 local World1Id = 2347215276041396 
 local World2Id = 4393594776630457
 local World3Id = 117452718386376
 local World4Id = 2730976067705314
+-- Function to handle player added event
 Players.PlayerAdded:Connect(function(player)
+	-- Initialize player values and folders
 	local ObjectsValue = Instance.new("IntValue", player)
 	ObjectsValue.Name = "ObjectsValue"
 	local ObjectsName = Instance.new("Folder", player)
 	ObjectsName.Name = "ObjectsName"
 	local Doors = Instance.new("Folder", player)
 	Doors.Name = "Doors"
-	local Donates = Instance.new("IntValue", player)
-	Donates.Name = "Donates"
-	ObjectsValue.Changed:Connect(function()
-		if ObjectsValue.Value >= 10 then
-			pcall(function() BadgeService:AwardBadge(player.UserId, World1Id) end)
+	local key = "user_" .. player.UserId
+	local defaultData = {
+		Objects = 0,
+		ObjectsTable = {},
+		DoorsTable = {},
+		VIP = false,
+		Jumps = 1,
+		Trail = nil
+	}
+	local retries = 3
+	local data
+	for i = 1, retries do
+		local success, err = pcall(function()
+			data = PlayerData:GetAsync(key)
+		end)
+		if success then
+			break
+		else
+			warn("Retrying data load... Attempt " .. i .. ": " .. err)
+			task.wait(1)
 		end
-		if ObjectsValue.Value >= 30 then
-			pcall(function() BadgeService:AwardBadge(player.UserId, World2Id) end)
-		end
-		if ObjectsValue.Value >= 50 then
-			pcall(function() BadgeService:AwardBadge(player.UserId, World3Id) end)
-		end
-		if ObjectsValue.Value >= 100 then
-			pcall(function() BadgeService:AwardBadge(player.UserId, World4Id) end)
-		end
-	end)
-	player:SetAttribute("WalkSpeed", 16)
-	player:SetAttribute("Jumps", 1)
-	player:SetAttribute("Trail", nil)
-	CharChangeEvent.OnServerEvent:Connect(function(char)
-		local playerCharacter = player.Character or char
-		local HRP = playerCharacter:WaitForChild("HumanoidRootPart")
-		handleGamePass(player, GamePassIDs.Vip, function()
-			player:SetAttribute("VIP", true)
-			giveTool(player, "FusionCoil")
-			player:SetAttribute("Jumps", (player:GetAttribute("Jumps") or 0) + 2)
-		end)
-		handleGamePass(player, GamePassIDs.Carpet, function()
-			giveTool(player, "MagicCarpet")
-		end)
-		handleGamePass(player, GamePassIDs.Hook, function()
-			giveTool(player, "Hook")
-		end)
-		handleGamePass(player, GamePassIDs.TrippleJump, function()
-			player:SetAttribute("Jumps", (player:GetAttribute("Jumps") or 0) + 3)
-		end)
-		handleGamePass(player, GamePassIDs.DoubleJump, function()
-			player:SetAttribute("Jumps", (player:GetAttribute("Jumps") or 0) + 2)
-		end)
-		handleGamePass(player, GamePassIDs.SpeedCoil, function()
-			giveTool(player, "SpeedCoil")
-		end)
-		handleGamePass(player, GamePassIDs.FusionCoil, function()
-			giveTool(player, "FusionCoil")
-		end)
-		handleGamePass(player, GamePassIDs.GravityCoil, function()
-			giveTool(player, "GravityCoil")
-		end)
-		handleGamePass(player, GamePassIDs.Unicorn, function()
-			giveTool(player, "Unicorn")
-		end)
-		handleGamePass(player, GamePassIDs.Balloon, function()
-			giveTool(player, "Balloon")
-		end)
-		handleGamePass(player, GamePassIDs.Cat, function()
-			giveTool(player, "Cat")
-		end)
-		handleGamePass(player, GamePassIDs.RainbowTrail, function()
-			CreateTrail(player, "RainbowTrail")
-		end)
-		handleGamePass(player, GamePassIDs.FlameTrail, function()
-			CreateTrail(player, "FlameTrail")
-		end)
-		handleGamePass(player, GamePassIDs.RedTrail, function()
-			CreateTrail(player, "RedTrail")
-		end)
-		handleGamePass(player, GamePassIDs.PurpleTrail, function()
-			CreateTrail(player, "PurpleTrail")
-		end)
-		handleGamePass(player, GamePassIDs.BlueTrail, function()
-			CreateTrail(player, "BlueTrail")
-		end)
-		handleGamePass(player, GamePassIDs.YellowTrail, function()
-			CreateTrail(player, "YellowTrail")
-		end)
-		handleGamePass(player, GamePassIDs.GreenTrail, function()
-			CreateTrail(player, "GreenTrail")
-		end)
-		handleGamePass(player, GamePassIDs.WhiteTrail, function()
-			CreateTrail(player, "WhiteTrail")
+	end
+	if not data then
+		warn("Error loading data after " .. retries .. " attempts")
+		data = defaultData
+	end
+	local success, err = pcall(function()
+		PlayerData:UpdateAsync(key, function(oldData)
+			return data
 		end)
 	end)
+	if not success then
+		warn("Error saving default data: " .. err)
+	end
+	ObjectsValue.Value = data.Objects
+	player:SetAttribute("VIP", data.VIP)
+	player:SetAttribute("Jumps", data.Jumps)
+	if data.Trail then
+		CreateTrail(player, data.Trail)
+	end
+	for _, objectName in pairs(data.ObjectsTable) do
+		local newObject = Instance.new("StringValue", ObjectsName)
+		newObject.Name = objectName
+	end
+	for _, doorName in pairs(data.DoorsTable) do
+		local newDoor = Instance.new("StringValue", Doors)
+		newDoor.Name = doorName
+	end
+	handleGamePass(player, GamePassIDs.Vip, function()
+		player:SetAttribute("VIP", true)
+		giveTool(player, "FusionCoil")
+	end)
+	handleGamePass(player, GamePassIDs.TrippleJump, function()
+		player:SetAttribute("Jumps", (player:GetAttribute("Jumps") or 0) + 3)
+	end)
+	handleGamePass(player, GamePassIDs.DoubleJump, function()
+		player:SetAttribute("Jumps", (player:GetAttribute("Jumps") or 0) + 2)
+	end)
+	handleGamePass(player, GamePassIDs.Carpet, function()
+		giveTool(player, "MagicCarpet")
+	end)
+	handleGamePass(player, GamePassIDs.Hook, function()
+		giveTool(player, "Hook")
+	end)
+	handleGamePass(player, GamePassIDs.FusionCoil, function()
+		giveTool(player, "FusionCoil")
+	end)
+	handleGamePass(player, GamePassIDs.GravityCoil, function()
+		giveTool(player, "GravityCoil")
+	end)
+	handleGamePass(player, GamePassIDs.SpeedCoil, function()
+		giveTool(player, "SpeedCoil")
+	end)
+	handleGamePass(player, GamePassIDs.Unicorn, function()
+		giveTool(player, "Unicorn")
+	end)
+	handleGamePass(player, GamePassIDs.Balloon, function()
+		giveTool(player, "Balloon")
+	end)
+	handleGamePass(player, GamePassIDs.Cat, function()
+		giveTool(player, "Cat")
+	end)
+	handleGamePass(player, GamePassIDs.RainbowTrail, function()
+		CreateTrail(player, "RainbowTrail")
+	end)
+	handleGamePass(player, GamePassIDs.FlameTrail, function()
+		CreateTrail(player, "FlameTrail")
+	end)
+	handleGamePass(player, GamePassIDs.RedTrail, function()
+		CreateTrail(player, "RedTrail")
+	end)
+	handleGamePass(player, GamePassIDs.PurpleTrail, function()
+		CreateTrail(player, "PurpleTrail")
+	end)
+	handleGamePass(player, GamePassIDs.BlueTrail, function()
+		CreateTrail(player, "BlueTrail")
+	end)
+	handleGamePass(player, GamePassIDs.YellowTrail, function()
+		CreateTrail(player, "YellowTrail")
+	end)
+	handleGamePass(player, GamePassIDs.GreenTrail, function()
+		CreateTrail(player, "GreenTrail")
+	end)
+	handleGamePass(player, GamePassIDs.WhiteTrail, function()
+		CreateTrail(player, "WhiteTrail")
+	end)
+end)
+-- Function to handle player removing event
+Players.PlayerRemoving:Connect(function(player)
+	local key = "user_" .. player.UserId
+	local data = {
+		Objects = player:WaitForChild("ObjectsValue").Value,
+		ObjectsTable = {},
+		DoorsTable = {},
+		VIP = player:GetAttribute("VIP"),
+		Jumps = player:GetAttribute("Jumps"),
+		Trail = player:GetAttribute("Trail")
+	}
+	for _, object in pairs(player:WaitForChild("ObjectsName"):GetChildren()) do
+		table.insert(data.ObjectsTable, object.Name)
+	end
+	for _, door in pairs(player:WaitForChild("Doors"):GetChildren()) do
+		table.insert(data.DoorsTable, door.Name)
+	end
+	local retries = 3
+	local success, err
+	for i = 1, retries do
+		success, err = pcall(function()
+			PlayerData:SetAsync(key, data)
+		end)
+		if success then
+			break
+		else
+			warn("Retrying data save... Attempt " .. i .. ": " .. err)
+			task.wait(1)
+		end
+	end
+	if not success then
+		warn("Error saving data after " .. retries .. " attempts")
+	end
 end)
