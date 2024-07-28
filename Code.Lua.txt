@@ -1,19 +1,11 @@
 -- Load the required Roblox services 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 local MarketplaceService = game:GetService("MarketplaceService")
 local DataStoreService = game:GetService("DataStoreService")
-local BadgeService = game:GetService("BadgeService")
 -- Define remote events and other variables
 local RemoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
-local Doors = Workspace:WaitForChild("Doors")
-local NumPerMap = game.ReplicatedStorage:FindFirstChild("NumPerMap")
-local ObjectFindEvent = RemoteEvents:WaitForChild("ObjectFindEvent")
-local CharChangeEvent = RemoteEvents:WaitForChild("CharChangeEvent")
 local TrailEvent = RemoteEvents:WaitForChild("TrailEvent")
-local UnlockDoorEvent = RemoteEvents:WaitForChild("UnlockDoorEvent")
-local DoorClientEvent = RemoteEvents:WaitForChild("DoorClientEvent")
 -- Data store for player data
 local PlayerData = DataStoreService:GetDataStore("PlayerData")
 -- Gamepass IDs
@@ -181,31 +173,6 @@ TrailEvent.OnServerEvent:Connect(function(player, trailName)
 		CreateTrail(player, trailName)
 	end
 end)
--- Connect the object find event
-ObjectFindEvent.OnServerEvent:Connect(function(player, object)
-	local ObjectsValue = player:WaitForChild("ObjectsValue")
-	ObjectsValue.Value += 1
-	local ObjectsName = player:WaitForChild("ObjectsName")
-	local newObject = Instance.new("StringValue", ObjectsName)
-	newObject.Name = object
-end)
--- Connect the door client event
-DoorClientEvent.OnServerEvent:Connect(function(player, message)
-	if player then
-		if not player:FindFirstChild("Doors"):FindFirstChild(message) then
-			local new = Instance.new("StringValue", player:FindFirstChild("Doors"))
-			new.Name = message
-		end
-	end
-end)
--- Initialize total objects value
-game.ReplicatedStorage.AllObjects.Value = (#Doors:GetChildren() + 1) * NumPerMap.Value
--- Badge IDs
-local WelcomeId = 2498866318158630
-local World1Id = 2347215276041396 
-local World2Id = 4393594776630457
-local World3Id = 117452718386376
-local World4Id = 2730976067705314
 -- Function to handle player added event
 local function handleGamePasses(player)
 	local passes = {
